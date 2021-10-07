@@ -140,7 +140,7 @@ module sdram_controller
   wire load_mode_done;
   wire active_done;
   wire refresh_done;
-  wire first_word;
+  //wire first_word;
   wire read_done;
   wire write_done;
   wire should_refresh;
@@ -162,11 +162,11 @@ module sdram_controller
   wire [SDRAM_BANK_WIDTH - 1 : 0] bank;
   
   //! Split FPGA address
-  assign col = [FPGA_ADDR_WIDTH - 1 : 
+  assign col = addr [FPGA_ADDR_WIDTH - 1 : 
                 FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH];
-  assign row = [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
+  assign row = addr [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
                 SDRAM_COL_WIDTH];
-  assign bank = [SDRAM_COL_WIDTH - 1 : 0];
+  assign bank = addr [SDRAM_COL_WIDTH - 1 : 0];
 
   //! SDRAM control FSM
   //! States ;
@@ -253,7 +253,7 @@ fsm : always @ * begin: fsm_next_state
     // Execute a write and autoprecharge command
     WRITE_A:
       if write_done
-        if (should_refresh) begin
+        if should_refresh begin
           next_state <= REFRESH;
           next_cmd   <= CMD_AUTO_REFRESH;
         end
@@ -267,7 +267,7 @@ fsm : always @ * begin: fsm_next_state
     // Execute an auto refresh
     REFRESH:
       if refresh_done
-        if (req) begin
+        if req begin
           next_state <= ACTIVE;
           next_cmd   <= CMD_ACTIVE;
         end
@@ -310,8 +310,8 @@ always @ (posedge clk, posedge reset) begin: update_refresh_counter
     refresh_counter <= refresh_counter + 1;
 end 
 
-//! Latch the request
-always @ (posedge clk) begin: latch_request 
+//! Register for FPGA side signals
+always @ (posedge clk) begin: fpga_side_reg
   if (start) begin
     addr_reg <= addr;
     data_reg <= wr_data;
@@ -320,18 +320,21 @@ always @ (posedge clk) begin: latch_request
 end process;
 
 //  SDRAM data output register
-always @ (posedge clk) begin
+always @ (posedge clk) begin: sdram_data_reg
    if state == READ then
       q_reg <= sdram_dq;
     end 
   end 
 end 
 
+// Assign output FPGA data port 
+assign rd_data = q_reg;
+
 // set wait signals
 assign load_mode_done = (wait_counter == LOAD_MODE_WAIT-1) ? 1'b1 : 1'b0;
 assign active_done    = (wait_counter == ACTIVE_WAIT-1   ) ? 1'b1 : 1'b0;
 assign refresh_done   = (wait_counter == REFRESH_WAIT-1  ) ? 1'b1 : 1'b0;
-assign first_word     = (wait_counter == CAS_LATENCY     ) ? 1'b1 : 1'b0;
+//assign first_word     = (wait_counter == CAS_LATENCY     ) ? 1'b1 : 1'b0;
 assign read_done      = (wait_counter == READ_WAIT-1     ) ? 1'b1 : 1'b0;
 assign write_done     = (wait_counter == WRITE_WAIT-1    ) ? 1'b1 : 1'b0;
 
@@ -349,15 +352,12 @@ assign start = (state = IDLE) |
 // assert the acknowledge signal at the beginning of the ACTIVE state
 assign ack = ((state == ACTIVE) & (wait_counter == 0)) ? 1'b1 : 1'b0;;
 
-// set output data
-assign q = q_reg;
-
 // deassert the clock enable at the beginning of the INIT state
-assign sdram_cke = ((state == INIT) and (wait_counter == 0)) ) ? 1'0 : 1'b1;;
+assign ram_clk_en = ((state == INIT) and (wait_counter == 0)) ) ? 1'b0 : 1'b1;;
 
 //! Set SDRAM control signals
-//! ram_clk_en, ram_cs_n, ras_n, cas_n, ram_we_n from SDRAM command
-assign {ram_clk_en, ram_cs_n, ras_n, cas_n, ram_we_n} = cmd [7:3];
+//! ram_cs_n, ras_n, cas_n, ram_we_n from SDRAM command
+assign {ram_cs_n, ram_ras_n, ram_cas_n, ram_we_n} = cmd [6:3];
 
 //! Set SDRAM bank
 always @ (state)
@@ -368,7 +368,7 @@ always @ (state)
     default: ram_bank_addr = 0;
   endcase
 
-// set SDRAM address???
+// set SDRAM address
 always @ (state)
   case (state)
     INIT   : ram_addr = "0100_0000_0000";
