@@ -24,9 +24,7 @@ module sdram_controller
      parameter  
                 //! FPGA systen interface
                 //! addr = {ram_bank_addr, row, col}
-                FPGA_ADDR_WIDTH   = SDRAM_BANK_WIDTH +
-                                    SDRAM_ROW_WIDTH +
-                                    SDRAM_COL_WIDTH, //! System address width
+                FPGA_ADDR_WIDTH   = 23, //! System address width
                 FPGA_DATA_WIDTH   = 32,   //! System data width
                 CLK_FREQUENCY_SYS = 166,  //! MHz System clock
 
@@ -37,40 +35,37 @@ module sdram_controller
                 SDRAM_ROW_WIDTH   = 12,   //! SDRAM row width
                 SDRAM_BANK_WIDTH  = 2,    //! SDRAM bank width
                 SDRAM_BYTES_WIDTH = $clog2 (SDRAM_DATA_WIDTH / 8),
-                SDRAM_CLK_MAX     = 166;  //! MHz From SDRAM datasheet
+                SDRAM_CLK_MAX     = 166,  //! MHz From SDRAM datasheet
                 //! Timig prameters
-//! Power-up delay 100 us min. Set 200 ms
-parameter  T_POWER_UP = 200_000;
-//! Command period (PRE to ACT) delay, ns min
-parameter  T_RP       = 18;    
-//! Command period (REF to REF/ACT to ACT) delay, ns min
-parameter  T_RC       = 60;    
-//! Mode register Program Time delay, ns min
-parameter  T_MRD      = 18;
-//! Active to Read/Write delay, ns min
-parameter  T_RCD      = 18;
-//! Refresh cycle time, ms max
-parameter  T_REF      = 64;
-//! RAS time, ns min
-parameter T_RAS       = 42;
-//! The number of 16-bit words to be bursted during a read/write
-// parameter BURST_LENGTH = 2;
-//! Write recovery Time or InputData to Precharge Command Delay Time
-parameter  T_WR        = 12;
-
-
-//! Mode Register Definition
-//! M9: Write Burst Mode: 0 - programmed Burst Lengtn, 1 - Single Location
-parameter WRITE_BURST_MODE = 1'b1;
-//! M3:  Burst Type: 0 - Sequention, 1 - Interleaved
-parameter BURST_TYPE       = 1'b0;
-//! M2: - M0  Burst Length 000 - 1; 001 - 2; 010 - 4; 011 - 8
-parameter BURST_LENGTH     = 3'b011;
-
-//!	Controller Parameter
-//! 166 MHz
-//! CAS Latence 2 cycle
-parameter CAS_LATENCY = 3'b010
+                //! Power-up delay 100 us min. Set 200 ms
+                T_POWER_UP = 200_000,
+                //! Command period (PRE to ACT) delay, ns min
+                T_RP       = 18,
+                //! Command period (REF to REF/ACT to ACT) delay, ns min
+                T_RC       = 60,    
+                //! Mode register Program Time delay, ns min
+                T_MRD      = 18,
+                //! Active to Read/Write delay, ns min
+                T_RCD      = 18,
+                //! Refresh cycle time, ms max
+                T_REF      = 64,
+                //! RAS time, ns min
+                T_RAS       = 42,
+                //! The number of 16-bit words to be bursted during a read/write
+                // parameter BURST_LENGTH = 2;
+                //! Write recovery Time or InputData to Precharge Command Delay Time
+                T_WR        = 12,
+                //! Mode Register Definition
+                //! M9: Write Burst Mode: 0 - programmed Burst Lengtn, 1 - Single Location
+                WRITE_BURST_MODE = 1'b1,
+                //! M3:  Burst Type: 0 - Sequention, 1 - Interleaved
+                BURST_TYPE       = 1'b0,
+                //! M2: - M0  Burst Length 000 - 1; 001 - 2; 010 - 4; 011 - 8
+                BURST_LENGTH     = 3'b011,
+                //!	Controller Parameter
+                //! 166 MHz
+                //! CAS Latence 2 cycle
+                CAS_LATENCY = 3'b010
 
 
 //! 100 MHz	
@@ -147,6 +142,7 @@ parameter CAS_LATENCY = 3'b011
   localparam MODE_REG = {2'b00, WRITE_BURST_MODE, 2'b00, CAS_LATENCY, BURST_TYPE, BURST_LENGTH};
 
   //! Calculate the clock period (in nanoseconds)
+  // 1/166*1000 = 6.02
   localparam CLK_PERIOD = 1.0/SDRAM_CLK_MAX * 1_000.0;
 
   //! The number of clock cycles from power-up to inicialaze SDRAM
@@ -162,10 +158,12 @@ parameter CAS_LATENCY = 3'b011
 
   // the number of clock cycles to wait while a REFRESH command is being
   // executed
+  // 10 
   localparam integer REFRESH_WAIT = T_RC/CLK_PERIOD;
 
   // the number of clock cycles to wait while a PRECHARGE command is being
   // executed
+  //3
   localparam integer PRECHARGE_WAIT = T_RP/CLK_PERIOD;
 
   // the number of clock cycles to wait while a READ command is being executed
@@ -190,7 +188,7 @@ parameter CAS_LATENCY = 3'b011
 
   //! Wait counter [$clog2 (INIT_WAIT) - 1 : 0]
   reg [14 : 0] wait_counter;  
-  //! Number of row per refresh time
+  //! Number of row per refresh time [$clog2 (ROW_WIDTH) - 1 : 0]
   reg [4 - 1 : 0] refresh_counter;
 
   //! Registers
@@ -211,20 +209,22 @@ parameter CAS_LATENCY = 3'b011
                 SDRAM_COL_WIDTH];
   assign bank = addr_reg [SDRAM_COL_WIDTH - 1 : 0];
 
+  assign ram_clk = clk;
+
   //! SDRAM control FSM
   //! States ;
   localparam [3:0]
-             INIT      = 4'b0000,
-             MODE      = 4'b1111,
-             IDLE      = 4'b0011,
-             REFRESH   = 4'b0110,
-             ACTIVATE  = 4'b0010,
-             NOP       = 4'b0001,
+             INIT      = 4'h0,
+             MODE      = 4'hf,
+             IDLE      = 4'h3,
+             REFRESH   = 4'h6,
+             ACTIVATE  = 4'h2,
+             NOP       = 4'h1,
 //             READ      = 4'b0100,
-             READ_A    = 4'b0101,
+             READ_A    = 4'h5,
 //             WRITE     = 4'b1000,
-             WRITE_A   = 4'b1001,
-             PRECHARGE = 4'b1100;
+             WRITE_A   = 4'h9,
+             PRECHARGE = 4'hc;
   reg [3:0] state, next_state;
 
 //! Next state logic
@@ -237,19 +237,28 @@ always @ * begin: fsm_next_state
   case (state)
     // Execute power-on sequence
     INIT:
-      if (wait_counter == 0)
+   if (wait_counter == 0) begin
         next_cmd   <= CMD_DESLECT;
-      else if (wait_counter == INIT_WAIT-1)
+        next_state <= INIT;
+      end
+      else if (wait_counter == INIT_WAIT) begin
         next_cmd   <= CMD_PRECHARGE;
-      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT-1)
+        next_state <= INIT;
+      end
+      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT) begin
         next_cmd   <= CMD_REFRESH;
-      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT+REFRESH_WAIT-1)
+        next_state <= INIT;
+      end
+      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT+REFRESH_WAIT) begin
         next_cmd   <= CMD_REFRESH;
-      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT+REFRESH_WAIT+REFRESH_WAIT-1)
+        next_state <= INIT;
+      end
+      else if (wait_counter == INIT_WAIT+PRECHARGE_WAIT+REFRESH_WAIT+REFRESH_WAIT)
       begin
         next_state <= MODE;
         next_cmd   <= CMD_LOAD_MODE;
       end
+ 
 
     // Set control register
     MODE:
