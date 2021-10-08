@@ -1,0 +1,10 @@
+
+State Machine - |sdram_controller|state
+Name state.MODE state.WRITE_A state.REFRESH state.READ_A state.IDLE state.ACTIVATE state.INIT 
+state.INIT 0 0 0 0 0 0 0 
+state.ACTIVATE 0 0 0 0 0 1 1 
+state.IDLE 0 0 0 0 1 0 1 
+state.READ_A 0 0 0 1 0 0 1 
+state.REFRESH 0 0 1 0 0 0 1 
+state.WRITE_A 0 1 0 0 0 0 1 
+state.MODE 1 0 0 0 0 0 1 
