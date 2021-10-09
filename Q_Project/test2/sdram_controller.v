@@ -47,8 +47,8 @@ module sdram_controller
                 T_MRD      = 18,
                 //! Active to Read/Write delay, ns min
                 T_RCD      = 18,
-                //! Refresh cycle time, ms max
-                T_REF      = 64,
+                //! Refresh cycle time, ns max
+                T_REF      = 64_000_000,
                 //! RAS time, ns min
                 T_RAS       = 42,
                 //! The number of 16-bit words to be bursted during a read/write
@@ -66,10 +66,8 @@ module sdram_controller
                 //! 166 MHz
                 //! CAS Latence 2 cycle
                 CAS_LATENCY = 3'b010
-
-
-//! 100 MHz	
 /*
+//! 100 MHz	
 //! CAS Latence 3 cycle
 parameter CAS_LATENCY = 3'b011
 */
@@ -77,66 +75,33 @@ parameter CAS_LATENCY = 3'b011
   
    (
      //! 
-     input                            clk,
-     input                            reset,
+     input                                  clk,
+     input                                  reset,
 
      //! FPGA port
-     input  [FPGA_ADDR_WIDTH   - 1 : 0] addr,
-     input                              wr_en,
-     input  [FPGA_DATA_WIDTH   - 1 : 0] wr_data,
-     output [FPGA_DATA_WIDTH   - 1 : 0] rd_data,
-     input                              rd_ready,
-     input                              req,
-     output                             ack,
+     input      [FPGA_ADDR_WIDTH   - 1 : 0] addr,
+     input                                  wr_en,
+     input      [FPGA_DATA_WIDTH   - 1 : 0] wr_data,
+     output     [FPGA_DATA_WIDTH   - 1 : 0] rd_data,
+     input                                  rd_ready,
+     input                                  req,
+     output                                 ack,
 
      //! SDRAM ports
      output reg [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
      output reg [SDRAM_BANK_WIDTH  - 1 : 0] ram_bank_addr,
-     output [SDRAM_BYTES_WIDTH - 1 : 0] ram_dqm,
-     inout  [SDRAM_DATA_WIDTH  - 1 : 0] ram_data,
+     output     [SDRAM_BYTES_WIDTH - 1 : 0] ram_dqm,
+     inout      [SDRAM_DATA_WIDTH  - 1 : 0] ram_data,
 
-     output                             ram_ras_n,
-     output                             ram_cas_n,
-     output                             ram_clk,
-     output                             ram_clk_en,
-     output                             ram_cs_n,
-     output                             ram_we_n
+     output                                 ram_ras_n,
+     output                                 ram_cas_n,
+     output                                 ram_clk,
+     output                                 ram_clk_en,
+     output                                 ram_cs_n,
+     output                                 ram_we_n
    );
 
 //! ------------------ Local Parameters --------------------
-//! SDRAM command code acording to datasheet
-
-//! | Command | Code | ram_clk_en | ram_cs_n | ras_n | cas_n | ram_we_n | ram_bank_addr[1] | ram_bank_addr[0] | ram_addr[10] | 											
-//! | ---------------------- | ------ | ------------ | ---------- | ------- | ------- | ---------- | ------------------ | ------------------ | -------------- | 											
-//! | Device deselect  | DESLECT | X | 1 | X | X | X | X | X | X | 											
-//! | No operation  | NOP | X | 0 | 1 | 1 | 1 | X | X | X | 											
-//! | Burst stop  | BST | X | 0 | 1 | 1 | 0 | X | X | X | 											
-//! | Read | READ | X | 0 | 1 | 0 | 1 | X | X | 0 | 											
-//! | Read with auto precharge | READ_PRE | X | 0 | 1 | 0 | 1 | X | X | 1 | 											
-//! | Write | WRITE | X | 0 | 1 | 0 | 0 | X | X | 0 | 											
-//! | Write with auto precharge | WRITE_PRE | X | 0 | 1 | 0 | 0 | X | X | 1 | 											
-//! | Bank activate  | ACTIVE | X | 0 | 0 | 1 | 1 | X | X | X | 											
-//! | Precharge select bank  | PRECHARGE | X | 0 | 0 | 1 | 0 | X | X | 0 | 											
-//! | Precharge all banks  | PRECHARGE_ALL | X | 0 | 0 | 1 | 0 | X | X | 1 | 											
-//! | CBR Auto-Refresh  | REFRESH | 1 | 0 | 0 | 0 | 1 | X | X | X | 											
-//! | Self-Refresh  | SELF_REFRESH | 0 | 0 | 0 | 0 | 1 | X | X | X | 											
-//! | Mode register set  | LOAD_MODE | X | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 											
-
-  localparam [7:0]
-             CMD_DESLECT       = 8'b11111111,
-             CMD_NOP           = 8'b10111XXX,
-             CMD_BST           = 8'b10110XXX,
-             CMD_READ          = 8'b10101XX0,
-             CMD_READ_PRE      = 8'b10101XX1,
-             CMD_WRITE         = 8'b10100XX0,
-             CMD_WRITE_PRE     = 8'b10100XX1,
-             CMD_ACTIVE        = 8'b10011XXX,
-             CMD_PRECHARGE     = 8'b10010XX0,
-             CMD_PRECHARGE_ALL = 8'b10010XX1,
-             CMD_REFRESH       = 8'b10001XXX,
-             CMD_SELF_REFRESH  = 8'b00001XXX,
-             CMD_LOAD_MODE     = 8'b10000000;
-  reg [7:0] cmd, next_cmd;
 
   //! The value written to the mode register to configure the memory
   localparam MODE_REG = {2'b00, WRITE_BURST_MODE, 2'b00, CAS_LATENCY, BURST_TYPE, BURST_LENGTH};
@@ -176,56 +141,82 @@ parameter CAS_LATENCY = 3'b011
   // the SDRAM
   localparam integer REFRESH_INTERVAL =T_REF/CLK_PERIOD - 10;
 
+//! SDRAM command code acording to datasheet
+//! | Command | Code | ram_cs_n | ras_n | cas_n | ram_we_n |  											
+//! | ---------------------- | ------------ | ---------- | ------- | ------- | ---------- | 											
+//! | Device deselect  | DESLECT | 1 | X | X | X | 											
+//! | No operation  | NOP | 0 | 1 | 1 | 1 |
+//! | Burst stop  | BST | 0 | 1 | 1 | 0 |
+//! | Read | READ | 0 | 1 | 0 | 1 |
+//! | Read with auto precharge | READ_PRE | 0 | 1 | 0 | 1 |
+//! | Write | WRITE | 0 | 1 | 0 | 0 |
+//! | Write with auto precharge | WRITE_PRE | 0 | 1 | 0 | 0 |
+//! | Bank activate  | ACTIVE | 0 | 0 | 1 | 1 |
+//! | Precharge select bank  | PRECHARGE | 0 | 0 | 1 | 0 | 
+//! | Precharge all banks  | PRECHARGE_ALL | 0 | 0 | 1 | 0 | 
+//! | CBR Auto-Refresh  | REFRESH | 0 | 0 | 0 | 1 |
+//! | Self-Refresh  | SELF_REFRESH | 0 | 0 | 0 | 1 |
+//! | Mode register set  | LOAD_MODE | 0 | 0 | 0 | 0 |
+
+  localparam           CMD_DESLECT       = 4'b1111;
+  localparam           CMD_NOP           = 4'b0111;
+  localparam           CMD_BST           = 4'b0110;
+  localparam           CMD_READ_PRE      = 4'b0101;
+  localparam           CMD_WRITE_PRE     = 4'b0100;
+  localparam           CMD_ACTIVE        = 4'b0011;
+  localparam           CMD_PRECHARGE     = 4'b0010;
+  localparam           CMD_REFRESH       = 4'b0001;
+  localparam           CMD_LOAD_MODE     = 4'b0000;
+
+  //! SDRAM control FSM States
+  localparam           INIT      = 8'b0000_0000;
+  localparam           MODE      = 8'b0000_0001;
+  localparam           IDLE      = 8'b0000_0010;
+  localparam           REFRESH   = 8'b0000_0100;
+  localparam           ACTIVATE  = 8'b0000_1000;
+  localparam           NOP       = 8'b0001_0000;
+//             READ      = 4'b0100,
+  localparam           READ_A    = 8'b0010_0000;
+//             WRITE     = 4'b1000,
+  localparam           WRITE_A   = 8'b0100_0000;
+  localparam           PRECHARGE = 8'b1000_0000;
+
+  reg                                                    [7:0] state, next_state;
+  reg                                                    [3:0] cmd, next_cmd;
+
   //! control signals
-  wire start;
-  wire load_mode_done;
-  wire active_done;
-  wire refresh_done;
-  //wire first_word;
-  wire read_done;
-  wire write_done;
-  wire should_refresh;
+  wire                                                         start;
+  wire                                                         load_mode_done;
+  wire                                                         active_done;
+  wire                                                         refresh_done;
+  wire                                                         read_done;
+  wire                                                         write_done;
+  wire                                                         should_refresh;
 
   //! Wait counter [$clog2 (INIT_WAIT) - 1 : 0]
-  reg [14 : 0] wait_counter;  
-  //! Number of row per refresh time [$clog2 (ROW_WIDTH) - 1 : 0]
-  reg [4 - 1 : 0] refresh_counter;
+  reg                                                 [14 : 0] wait_counter;  
+  //! Number of row per refresh time [$clog2 (REFRESH_INTERVAL) - 1 : 0]
+  reg                                              [23 : 0] refresh_counter;
 
   //! Registers
   reg [SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH+SDRAM_BANK_WIDTH-1 : 0] addr_reg;
-  reg [FPGA_DATA_WIDTH-1                                  : 0] data_reg;
+  reg                                  [FPGA_DATA_WIDTH-1 : 0] data_reg;
   reg                                                          we_reg;
-  reg [FPGA_DATA_WIDTH-1                                  : 0] q_reg;
+  reg                                   [FPGA_DATA_WIDTH-1: 0] q_reg;
 
   //! Wires for column, row and banks
-  wire [SDRAM_COL_WIDTH  - 1 : 0] col;
-  wire [SDRAM_ROW_WIDTH  - 1 : 0] row;
-  wire [SDRAM_BANK_WIDTH - 1 : 0] bank;
+  wire                               [SDRAM_COL_WIDTH - 1 : 0] col;
+  wire                               [SDRAM_ROW_WIDTH - 1 : 0] row;
+  wire                              [SDRAM_BANK_WIDTH - 1 : 0] bank;
   
   //! Split FPGA address
-  assign col = addr_reg [FPGA_ADDR_WIDTH - 1 : 
-                FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH];
-  assign row = addr_reg [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
-                SDRAM_COL_WIDTH];
+  assign col  = addr_reg [FPGA_ADDR_WIDTH - 1 : 
+                          FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH];
+  assign row  = addr_reg [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
+                          SDRAM_COL_WIDTH];
   assign bank = addr_reg [SDRAM_COL_WIDTH - 1 : 0];
 
   assign ram_clk = clk;
-
-  //! SDRAM control FSM
-  //! States ;
-  localparam [3:0]
-             INIT      = 4'h0,
-             MODE      = 4'hf,
-             IDLE      = 4'h3,
-             REFRESH   = 4'h6,
-             ACTIVATE  = 4'h2,
-             NOP       = 4'h1,
-//             READ      = 4'b0100,
-             READ_A    = 4'h5,
-//             WRITE     = 4'b1000,
-             WRITE_A   = 4'h9,
-             PRECHARGE = 4'hc;
-  reg [3:0] state, next_state;
 
 //! Next state logic
 always @ * begin: fsm_next_state
@@ -262,8 +253,11 @@ always @ * begin: fsm_next_state
 
     // Set control register
     MODE:
-      if (load_mode_done)
+      if (load_mode_done) begin
         next_state <= IDLE;
+        next_cmd <= CMD_NOP;
+      end
+
 
     // Wait for a read/write request
     IDLE:
@@ -274,7 +268,11 @@ always @ * begin: fsm_next_state
       else if (req) begin
         next_state <= ACTIVATE;
         next_cmd   <= CMD_ACTIVE;
-      end
+      end  
+        else begin
+          next_state <= IDLE;
+          next_cmd <= CMD_NOP;
+        end
 
     // Activate the row
     ACTIVATE:
@@ -299,8 +297,10 @@ always @ * begin: fsm_next_state
           next_state <= ACTIVATE;
           next_cmd   <= CMD_ACTIVE;
         end
-        else
-          next_state <= IDLE;
+          else begin
+            next_state <= IDLE;
+            next_cmd <= CMD_NOP;
+          end
 
     // Execute a write and autoprecharge command
     WRITE_A:
@@ -313,8 +313,10 @@ always @ * begin: fsm_next_state
           next_state <= ACTIVATE;
           next_cmd   <= CMD_ACTIVE;
         end
-        else
-          next_state <= IDLE;
+          else begin
+            next_state <= IDLE;
+            next_cmd <= CMD_NOP;
+          end
 
     // Execute an auto refresh
     REFRESH:
@@ -323,8 +325,10 @@ always @ * begin: fsm_next_state
           next_state <= ACTIVATE;
           next_cmd   <= CMD_ACTIVE;
         end
-        else
-          next_state <= IDLE;
+          else begin
+            next_state <= IDLE;
+            next_cmd <= CMD_NOP;
+          end
   endcase
 end
 
@@ -361,6 +365,8 @@ always @ (posedge clk, posedge reset) begin: update_refresh_counter
   else
     refresh_counter <= refresh_counter + 1;
 end 
+// the SDRAM should be refreshed when the refresh interval has elapsed
+assign should_refresh  = (refresh_counter >= REFRESH_INTERVAL-1) ? 1'b1 : 1'b0;
 
 //! Register for FPGA side signals
 always @ (posedge clk) begin: fpga_side_reg
@@ -388,13 +394,8 @@ assign refresh_done   = (wait_counter == (REFRESH_WAIT-1  )) ? 1'b1 : 1'b0;
 assign read_done      = (wait_counter == (READ_WAIT-1     )) ? 1'b1 : 1'b0;
 assign write_done     = (wait_counter == (WRITE_WAIT-1    )) ? 1'b1 : 1'b0;
 
-// the SDRAM should be refreshed when the refresh interval has elapsed
-assign should_refresh  = (refresh_counter >= REFRESH_INTERVAL-1) ? 1'b1 : 1'b0;
-
 // a new request is only allowed at the end of the 
 // IDLE, READ, WRITE, and REFRESH states
-
-		  
 assign start = ((state == IDLE) |
         ((state == READ_A) & (read_done == 1'b1)) |
         ((state == WRITE_A) & (write_done == 1'b1)) |
