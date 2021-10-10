@@ -138,25 +138,11 @@ endtask
 
 // ----------------- write_task -----------------------//
 
-task write_task (
-  input    [SDRAM_COL_WIDTH - 1 : 0] addr_col,
-  input    [SDRAM_ROW_WIDTH - 1 : 0] addr_row,
-  input   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank, 
-  output [FPGA_ADDR_WIDTH   - 1 : 0] full_addr,
-  input   [FPGA_DATA_WIDTH  - 1 : 0] ram_in_data
-  ); begin
+task write_task (); begin
 
   fpga_reset = 0;
-  fpga_wr_en = 0;
+  fpga_rd_en = 0;
 
-  full_addr [FPGA_ADDR_WIDTH - 1 : 
-        FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH] = addr_bank;
-  full_addr [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
-        SDRAM_COL_WIDTH] = addr_row;
-  full_addr [SDRAM_COL_WIDTH - 1 : 0] = addr_col;
-
-  fpga_addr = full_addr;
-  fpga_wr_data = ram_in_data;
   fpga_wr_en = 1;
   fpga_req = 1;
   //wait acknowledge
@@ -170,29 +156,16 @@ endtask
 
 // ----------------- read_task -----------------------//
 
-task read_task (
-  input    [SDRAM_COL_WIDTH - 1 : 0] addr_col,
-  input    [SDRAM_ROW_WIDTH - 1 : 0] addr_row,
-  input   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank, 
-  output [FPGA_ADDR_WIDTH   - 1 : 0] full_addr,
-  output [FPGA_DATA_WIDTH   - 1 : 0] ram_out_data
-  ); begin
+task read_task (); begin
 
   fpga_reset = 0;
   fpga_rd_en = 0;
-
-  full_addr [FPGA_ADDR_WIDTH - 1 : 
-        FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH] = addr_bank;
-  full_addr [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
-        SDRAM_COL_WIDTH] = addr_row;
-  full_addr [SDRAM_COL_WIDTH - 1 : 0] = addr_col;
 
   fpga_rd_en = 1;
   fpga_req = 1;
   //wait acknowledge
   while(~fpga_ack) @(posedge fpga_clk);
   
-  ram_out_data = fpga_rd_data;
   //do idle
   fpga_rd_en = 0;
   fpga_req = 0;
@@ -235,8 +208,11 @@ $display ("\n    ------------- Full amd empty test ----------------\n");
   addr_bank = 2'h0;
   ram_in_data = 32'hff01; 
  
-  write_task (addr_col, addr_row, addr_bank, 
-    tb_fpga_addr, ram_in_data);
+  tb_fpga_addr = {addr_bank, addr_row, addr_col};
+  fpga_wr_data = ram_in_data;
+
+  write_task (/*addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, ram_in_data*/);
 
   # (clock_period * REFRESH_INTERVAL/4);
   addr_col = 9'h0f2;
@@ -244,8 +220,11 @@ $display ("\n    ------------- Full amd empty test ----------------\n");
   addr_bank = 2'h1;
   ram_in_data = 32'hff02; 
  
-  write_task (addr_col, addr_row, addr_bank, 
-    tb_fpga_addr, ram_in_data);
+  tb_fpga_addr = {addr_bank, addr_row, addr_col};
+  fpga_wr_data = ram_in_data;
+
+  write_task (/*addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, ram_in_data*/);
 
   # (clock_period * REFRESH_INTERVAL/4);
 
@@ -253,16 +232,19 @@ $display ("\n    ------------- Full amd empty test ----------------\n");
   addr_row = 12'hfff;
   addr_bank = 2'h0;
  
-  read_task (addr_col, addr_row, addr_bank, 
-    tb_fpga_addr, tb_rd_data);
+  tb_fpga_addr = {addr_bank, addr_row, addr_col};
+ 
+  read_task ();
 
   # (clock_period * REFRESH_INTERVAL/4);
   addr_col = 9'h0f2;
   addr_row = 12'h5f2;
   addr_bank = 2'h1;
+  ram_in_data = 32'hff02; 
  
-  read_task (addr_col, addr_row, addr_bank, 
-    tb_fpga_addr, tb_rd_data);
+  tb_fpga_addr = {addr_bank, addr_row, addr_col};
+ 
+  read_task ();
 
   # (clock_period * 30);
 
