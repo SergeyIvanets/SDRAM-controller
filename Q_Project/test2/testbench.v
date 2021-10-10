@@ -18,27 +18,33 @@ module testbench;
                 T_RC              = 60,    
                 T_MRD             = 18,
                 T_RCD             = 18,
-                T_REF             = 64,
+                T_REF             = 640,
                 T_RAS             = 42,
                 T_WR              = 12,
                 WRITE_BURST_MODE  = 1'b1,
                 BURST_TYPE        = 1'b0,
-                BURST_LENGTH      = 3'b011,
+                BURST_LENGTH      = 3'b000,
                 CAS_LATENCY       = 3'b010,
 
                 // simulation options
                 clock_period      = 10;
 
-  reg                              clk;
-  reg                              reset;
+  localparam               CLK_PERIOD = 1.0/SDRAM_CLK_MAX * 1_000.0;
+  localparam integer REFRESH_INTERVAL =T_REF/CLK_PERIOD - 10;
+
+  reg                              fpga_clk;
+  reg                              fpga_reset;
   //! FPGA port
-  reg  [FPGA_ADDR_WIDTH   - 1 : 0] addr;
-  reg                              wr_en;
-  reg  [FPGA_DATA_WIDTH   - 1 : 0] wr_data;
-  wire [FPGA_DATA_WIDTH   - 1 : 0] rd_data;
-  reg                              rd_ready;
-  reg                              req;
-  wire                             ack;
+  reg  [FPGA_ADDR_WIDTH   - 1 : 0] tb_fpga_addr;
+  reg [FPGA_DATA_WIDTH   - 1 : 0] tb_rd_data;
+
+  reg  [FPGA_ADDR_WIDTH   - 1 : 0] fpga_addr;
+  reg                              fpga_wr_en;
+  reg  [FPGA_DATA_WIDTH   - 1 : 0] fpga_wr_data;
+  wire [FPGA_DATA_WIDTH   - 1 : 0] fpga_rd_data;
+  reg                              fpga_rd_en;
+  reg                              fpga_req;
+  wire                             fpga_ack;
 
   //! SDRAM ports
   wire [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr;
@@ -46,6 +52,18 @@ module testbench;
   wire [SDRAM_BYTES_WIDTH - 1 : 0] ram_dqm;
   wire [SDRAM_DATA_WIDTH  - 1 : 0] ram_data;
 
+  wire                             ram_ras_n;
+  wire                             ram_cas_n;
+  wire                             ram_clk;
+  wire                             ram_clk_en;
+  wire                             ram_cs_n;
+  wire                             ram_we_n;
+
+  reg    [SDRAM_COL_WIDTH - 1 : 0] addr_col;
+  reg    [SDRAM_ROW_WIDTH - 1 : 0] addr_row;
+  reg   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank; 
+  reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_in_data;
+  reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_out_data;
 
 sdram_controller 
   #(
@@ -75,25 +93,25 @@ sdram_controller
 
 sdram_controller_inst
 (
-	.clk            (clk            ) ,	// input  clk
-	.reset          (reset          ) ,	// input  reset
-	.addr           (addr           ) ,	// input [FPGA_ADDR_WIDTH-1:0] addr
-	.wr_en          (wr_en          ) ,	// input  wr_en
-	.wr_data        (wr_data        ) ,	// input [FPGA_DATA_WIDTH-1:0] wr_data
-	.rd_data        (rd_data        ) ,	// output [FPGA_DATA_WIDTH-1:0] rd_data
-	.rd_ready       (rd_ready       ) ,	// input  rd_ready
-	.req            (req            ) ,	// input  req
-	.ack            (ack            ) ,	// output  ack
-	.ram_addr       (ram_addr       ) ,	// output [SDRAM_ADDR_WIDTH-1:0] ram_addr
-	.ram_bank_addr  (ram_bank_addr  ) ,	// output [SDRAM_BANK_WIDTH-1:0] ram_bank_addr
-	.ram_dqm        (ram_dqm        ) ,	// output [SDRAM_BYTES_WIDTH-1:0] ram_dqm
-	.ram_data       (ram_data       ) ,	// inout [SDRAM_DATA_WIDTH-1:0] ram_data
-	.ram_ras_n      (ram_ras_n      ) ,	// output  ram_ras_n
-	.ram_cas_n      (ram_cas_n      ) ,	// output  ram_cas_n
-	.ram_clk        (ram_clk        ) ,	// output  ram_clk
-	.ram_clk_en     (ram_clk_en     ) ,	// output  ram_clk_en
-	.ram_cs_n       (ram_cs_n       ) ,	// output  ram_cs_n
-	.ram_we_n       (ram_we_n       ) 	// output  ram_we_n
+	.fpga_clk        (fpga_clk            ) ,	// input  clk
+	.fpga_reset      (fpga_reset          ) ,	// input  reset
+	.fpga_addr       (fpga_addr           ) ,	// input [FPGA_ADDR_WIDTH-1:0] addr
+	.fpga_wr_en      (fpga_wr_en          ) ,	// input  wr_en
+	.fpga_wr_data    (fpga_wr_data        ) ,	// input [FPGA_DATA_WIDTH-1:0] wr_data
+	.fpga_rd_data    (fpga_rd_data        ) ,	// output [FPGA_DATA_WIDTH-1:0] rd_data
+	.fpga_rd_en      (fpga_rd_en          ) ,	// input  rd_ready
+	.fpga_req        (fpga_req            ) ,	// input  req
+	.fpga_ack        (fpga_ack            ) ,	// output  ack
+	.ram_addr        (ram_addr            ) ,	// output [SDRAM_ADDR_WIDTH-1:0] ram_addr
+	.ram_bank_addr   (ram_bank_addr       ) ,	// output [SDRAM_BANK_WIDTH-1:0] ram_bank_addr
+	.ram_dqm         (ram_dqm             ) ,	// output [SDRAM_BYTES_WIDTH-1:0] ram_dqm
+	.ram_data        (ram_data            ) ,	// inout [SDRAM_DATA_WIDTH-1:0] ram_data
+	.ram_ras_n       (ram_ras_n           ) ,	// output  ram_ras_n
+	.ram_cas_n       (ram_cas_n           ) ,	// output  ram_cas_n
+	.ram_clk         (ram_clk             ) ,	// output  ram_clk
+	.ram_clk_en      (ram_clk_en          ) ,	// output  ram_clk_en
+	.ram_cs_n        (ram_cs_n            ) ,	// output  ram_cs_n
+	.ram_we_n        (ram_we_n            ) 	// output  ram_we_n
 );
 
 //-----------------------------------------------------//
@@ -101,23 +119,100 @@ sdram_controller_inst
   
 initial
   begin
-    clk = 1'b0;
-    forever # (clock_period / 2) clk = ~ clk;
+
+    fpga_clk = 1'b0;
+    forever # (clock_period / 2) fpga_clk = ~ fpga_clk;
   end 
 
-task reset_task ();
-  begin
-    reset      = 1'b1;
-    req        = 1'b0;
-    repeat (10)  @ (posedge clk);    
-    reset = 1'b0;
+task reset_task (); begin
+    fpga_reset      = 1'b1;
+    fpga_req        = 1'b0;
+    fpga_wr_en      = 1'b0;
+    fpga_rd_en      = 1'b0;
+    fpga_addr <= {FPGA_ADDR_WIDTH{1'b0}};
+    repeat (10)  @ (posedge fpga_clk);    
+    fpga_reset = 1'b0;
   end
+endtask
+
+
+// ----------------- write_task -----------------------//
+
+task write_task (
+  input    [SDRAM_COL_WIDTH - 1 : 0] addr_col,
+  input    [SDRAM_ROW_WIDTH - 1 : 0] addr_row,
+  input   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank, 
+  output [FPGA_ADDR_WIDTH   - 1 : 0] full_addr,
+  input   [FPGA_DATA_WIDTH  - 1 : 0] ram_in_data
+  ); begin
+
+  fpga_reset = 0;
+  fpga_wr_en = 0;
+
+  full_addr [FPGA_ADDR_WIDTH - 1 : 
+        FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH] = addr_bank;
+  full_addr [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
+        SDRAM_COL_WIDTH] = addr_row;
+  full_addr [SDRAM_COL_WIDTH - 1 : 0] = addr_col;
+
+  fpga_addr = full_addr;
+  fpga_wr_data = ram_in_data;
+  fpga_wr_en = 1;
+  fpga_req = 1;
+  //wait acknowledge
+  while(~fpga_ack) @(posedge fpga_clk);
+
+  //do idle
+  fpga_wr_en = 0;
+  fpga_req = 0;
+end
+endtask
+
+// ----------------- read_task -----------------------//
+
+task read_task (
+  input    [SDRAM_COL_WIDTH - 1 : 0] addr_col,
+  input    [SDRAM_ROW_WIDTH - 1 : 0] addr_row,
+  input   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank, 
+  output [FPGA_ADDR_WIDTH   - 1 : 0] full_addr,
+  output [FPGA_DATA_WIDTH   - 1 : 0] ram_out_data
+  ); begin
+
+  fpga_reset = 0;
+  fpga_rd_en = 0;
+
+  full_addr [FPGA_ADDR_WIDTH - 1 : 
+        FPGA_ADDR_WIDTH - SDRAM_BANK_WIDTH] = addr_bank;
+  full_addr [SDRAM_COL_WIDTH + SDRAM_ROW_WIDTH - 1 : 
+        SDRAM_COL_WIDTH] = addr_row;
+  full_addr [SDRAM_COL_WIDTH - 1 : 0] = addr_col;
+
+  fpga_rd_en = 1;
+  fpga_req = 1;
+  //wait acknowledge
+  while(~fpga_ack) @(posedge fpga_clk);
+  
+  ram_out_data = fpga_rd_data;
+  //do idle
+  fpga_rd_en = 0;
+  fpga_req = 0;
+end
 endtask
 
 
 //-----------------------------------------------------//
 // ----------------- Simulation -----------------------//
-  
+
+//! FPGA address and data register
+always @ (posedge fpga_clk, posedge fpga_reset) begin
+  if (fpga_reset) begin
+    fpga_addr <= {FPGA_ADDR_WIDTH{1'b0}};
+  end
+  else begin
+    fpga_addr <= tb_fpga_addr;
+  end
+end 
+
 initial
 begin
 
@@ -132,10 +227,45 @@ begin
 
 $display ("\n    ------------- Full amd empty test ----------------\n");
   reset_task ();
-  # (clock_period * 1.5);
-    
-  
-  # (clock_period * 10000);
+
+  # (clock_period * REFRESH_INTERVAL * 2);
+
+  addr_col = 9'h001;
+  addr_row = 12'hfff;
+  addr_bank = 2'h0;
+  ram_in_data = 32'hff01; 
+ 
+  write_task (addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, ram_in_data);
+
+  # (clock_period * REFRESH_INTERVAL/4);
+  addr_col = 9'h0f2;
+  addr_row = 12'h5f2;
+  addr_bank = 2'h1;
+  ram_in_data = 32'hff02; 
+ 
+  write_task (addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, ram_in_data);
+
+  # (clock_period * REFRESH_INTERVAL/4);
+
+  addr_col = 9'h001;
+  addr_row = 12'hfff;
+  addr_bank = 2'h0;
+ 
+  read_task (addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, tb_rd_data);
+
+  # (clock_period * REFRESH_INTERVAL/4);
+  addr_col = 9'h0f2;
+  addr_row = 12'h5f2;
+  addr_bank = 2'h1;
+ 
+  read_task (addr_col, addr_row, addr_bank, 
+    tb_fpga_addr, tb_rd_data);
+
+  # (clock_period * 30);
+
   $finish;
 end
 
