@@ -18,13 +18,13 @@
 #
 # Quartus Prime
 # Version 18.0.0 Build 614 04/24/2018 SJ Standard Edition
-# Date created = 21:42:31  October 07, 2021
+# Date created = 11:06:29  October 11, 2021
 #
 # -------------------------------------------------------------------------- #
 
 QUARTUS_VERSION = "18.0"
-DATE = "21:42:31  October 07, 2021"
+DATE = "11:06:29  October 11, 2021"
 
 # Revisions
 
-PROJECT_REVISION = "sdram_controller"
+PROJECT_REVISION = "mem_test"

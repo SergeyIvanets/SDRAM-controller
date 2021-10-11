@@ -61,7 +61,7 @@ module sdram_controller
                 //! M3:  Burst Type: 0 - Sequention, 1 - Interleaved
                 BURST_TYPE       = 1'b0,
                 //! M2: - M0  Burst Length in  000 - 1; 001 - 2; 010 - 4; 011 - 8
-                BURST_LENGTH     = 3'b011,
+                BURST_LENGTH     = 3'b000,
                 //!	Controller Parameter
                 //! 166 MHz
                 //! CAS Latence 2 cycle
@@ -338,12 +338,12 @@ end
 //! Next state register
 always @ (posedge fpga_clk, posedge fpga_reset) begin: fsm_next_state_register
   if (fpga_reset) begin
-    state <= INIT;
-    cmd   <= CMD_NOP;
+    state <= #1 INIT;
+    cmd   <= #1 CMD_NOP;
   end
   else begin
-    state <= next_state;
-    cmd   <= next_cmd;
+    state <= #1 next_state;
+    cmd   <= #1 next_cmd;
   end
 end 
 
@@ -351,22 +351,22 @@ end
 //! for a number of clock cycles
 always @ (posedge fpga_clk, posedge fpga_reset) begin: wait_counter_always
   if (fpga_reset) 
-    wait_counter <= 0;
+    wait_counter <= #1 0;
   // state changing
   else if (state != next_state) 
-    wait_counter <= 0;
+    wait_counter <= #1 0;
   else
-    wait_counter <= wait_counter + 1;
+    wait_counter <= #1 wait_counter + 1;
 end
 
 //! The refresh counter is used to periodically trigger a refresh operation
 always @ (posedge fpga_clk, posedge fpga_reset) begin: update_refresh_counter 
   if (fpga_reset) 
-    refresh_counter <= 0;
+    refresh_counter <= #1 0;
   else if ((state == REFRESH) & (wait_counter == 0))
-      refresh_counter <= 0;
+      refresh_counter <= #1 0;
   else
-    refresh_counter <= refresh_counter + 1;
+    refresh_counter <= #1 refresh_counter + 1;
 end 
 // the SDRAM should be refreshed when the refresh interval has elapsed
 assign should_refresh  = (refresh_counter >= REFRESH_INTERVAL-1) ? 1'b1 : 1'b0;
@@ -374,17 +374,17 @@ assign should_refresh  = (refresh_counter >= REFRESH_INTERVAL-1) ? 1'b1 : 1'b0;
 //! Register for FPGA side signals
 always @ (posedge fpga_clk) begin: fpga_side_reg
   if (start) begin
-    addr_reg <= fpga_addr;
-    data_reg <= fpga_wr_data;
-    we_reg   <= fpga_wr_en;
-    rd_reg   <= fpga_rd_en;
+    addr_reg <= #1 fpga_addr;
+    data_reg <= #1 fpga_wr_data;
+    we_reg   <= #1 fpga_wr_en;
+    rd_reg   <= #1 fpga_rd_en;
   end
 end
 
 //  SDRAM data output register
 always @ (posedge fpga_clk) begin: sdram_data_reg
    if (state == READ_A )
-      q_reg <= ram_dqm;
+      q_reg <= #1 ram_data;
 end 
 
 // Assign output FPGA data port 
@@ -407,7 +407,7 @@ assign start = ((state == IDLE) |
         ? 1'b1 : 1'b0;
 
 // assert the acknowledge signal at the beginning of the ACTIVE state
-assign fpga_ack = ((state == ACTIVATE) & (wait_counter == 0)) ? 1'b1 : 1'b0;
+  assign fpga_ack = (((state == READ_A)|(state == WRITE_A)) & (wait_counter == 0)) ? 1'b1 : 1'b0;
 
 // deassert the clock enable at the beginning of the INIT state
 assign ram_clk_en = ((state == INIT) & (wait_counter == 0)) ? 1'b0 : 1'b1;
