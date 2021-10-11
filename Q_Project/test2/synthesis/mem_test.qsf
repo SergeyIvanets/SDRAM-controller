@@ -12,4 +12,70 @@ set_global_assignment -name VERILOG_FILE ../../pll166.v
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
+set_location_assignment PIN_H22 -to ram_data[0]
+set_location_assignment PIN_F22 -to ram_data[1]
+set_location_assignment PIN_E22 -to ram_data[2]
+set_location_assignment PIN_D22 -to ram_data[3]
+set_location_assignment PIN_C22 -to ram_data[4]
+set_location_assignment PIN_B22 -to ram_data[5]
+set_location_assignment PIN_A19 -to ram_data[6]
+set_location_assignment PIN_A18 -to ram_data[7]
+set_location_assignment PIN_B18 -to ram_data[8]
+set_location_assignment PIN_B19 -to ram_data[9]
+set_location_assignment PIN_B21 -to ram_data[10]
+set_location_assignment PIN_C21 -to ram_data[11]
+set_location_assignment PIN_D21 -to ram_data[12]
+set_location_assignment PIN_E21 -to ram_data[13]
+set_location_assignment PIN_F21 -to ram_data[14]
+set_location_assignment PIN_H21 -to ram_data[15]
+set_location_assignment PIN_A6 -to ram_data[16]
+set_location_assignment PIN_A5 -to ram_data[17]
+set_location_assignment PIN_A4 -to ram_data[18]
+set_location_assignment PIN_A3 -to ram_data[19]
+set_location_assignment PIN_B1 -to ram_data[20]
+set_location_assignment PIN_C3 -to ram_data[21]
+set_location_assignment PIN_E1 -to ram_data[22]
+set_location_assignment PIN_F1 -to ram_data[23]
+set_location_assignment PIN_F2 -to ram_data[24]
+set_location_assignment PIN_D2 -to ram_data[25]
+set_location_assignment PIN_C4 -to ram_data[26]
+set_location_assignment PIN_B2 -to ram_data[27]
+set_location_assignment PIN_B3 -to ram_data[28]
+set_location_assignment PIN_B4 -to ram_data[29]
+set_location_assignment PIN_B5 -to ram_data[30]
+set_location_assignment PIN_B6 -to ram_data[31]
+set_location_assignment PIN_D10 -to ram_addr[0]
+set_location_assignment PIN_A9 -to ram_addr[1]
+set_location_assignment PIN_A8 -to ram_addr[2]
+set_location_assignment PIN_B8 -to ram_addr[3]
+set_location_assignment PIN_B9 -to ram_addr[4]
+set_location_assignment PIN_B10 -to ram_addr[5]
+set_location_assignment PIN_E9 -to ram_addr[6]
+set_location_assignment PIN_F11 -to ram_addr[7]
+set_location_assignment PIN_E13 -to ram_addr[8]
+set_location_assignment PIN_B13 -to ram_addr[9]
+set_location_assignment PIN_A10 -to ram_addr[10]
+set_location_assignment PIN_A13 -to ram_addr[11]
+set_location_assignment PIN_A17 -to ram_dqm[0]
+set_location_assignment PIN_B17 -to ram_dqm[1]
+set_location_assignment PIN_A7 -to ram_dqm[2]
+set_location_assignment PIN_B7 -to ram_dqm[3]
+set_location_assignment PIN_D13 -to ram_bank_addr[0]
+set_location_assignment PIN_E11 -to ram_bank_addr[1]
+set_location_assignment PIN_T22 -to clk74_25M
+set_location_assignment PIN_AB16 -to fpga_reset
+set_location_assignment PIN_B20 -to ram_clk
+set_location_assignment PIN_B14 -to ram_clk_en
+set_location_assignment PIN_B16 -to ram_cas_n
+set_location_assignment PIN_A14 -to ram_cs_n
+set_location_assignment PIN_A15 -to ram_ras_n
+set_location_assignment PIN_A16 -to ram_we_n
+
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to *
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+set_global_assignment -name OPTIMIZATION_MODE BALANCED
+set_global_assignment -name QIP_FILE pll166.qip
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

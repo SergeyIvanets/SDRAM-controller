@@ -34,7 +34,7 @@ module sdram_controller
                 SDRAM_COL_WIDTH   = 9,    //! SDRAM colomn width
                 SDRAM_ROW_WIDTH   = 12,   //! SDRAM row width
                 SDRAM_BANK_WIDTH  = 2,    //! SDRAM bank width
-                SDRAM_BYTES_WIDTH = $clog2 (SDRAM_DATA_WIDTH / 8),
+                SDRAM_BYTES_WIDTH = 4,
                 SDRAM_CLK_MAX     = 166,  //! MHz From SDRAM datasheet
                 //! Timig prameters
                 //! Power-up delay 100 us min. Set 200 ms
