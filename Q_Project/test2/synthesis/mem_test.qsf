@@ -4,15 +4,19 @@ set_global_assignment -name TOP_LEVEL_ENTITY mem_test
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 18.0.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "11:06:29  OCTOBER 11, 2021"
 set_global_assignment -name LAST_QUARTUS_VERSION "18.0.0 Standard Edition"
-set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
-set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
-set_global_assignment -name VERILOG_FILE ../../mem_test.v
-set_global_assignment -name VERILOG_FILE ../../sdram_controller.v
-set_global_assignment -name VERILOG_FILE ../../pll166.v
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 
+#============================================================
+# CLOCK & RESET
+#============================================================
+set_location_assignment PIN_T22 -to clk74_25M
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to clk74_25M
+
+set_location_assignment PIN_AB16 -to fpga_reset
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to fpga_reset
+
+#============================================================
+# SDRAM
+#============================================================
 set_location_assignment PIN_H22 -to ram_data[0]
 set_location_assignment PIN_F22 -to ram_data[1]
 set_location_assignment PIN_E22 -to ram_data[2]
@@ -63,8 +67,6 @@ set_location_assignment PIN_A7 -to ram_dqm[2]
 set_location_assignment PIN_B7 -to ram_dqm[3]
 set_location_assignment PIN_D13 -to ram_bank_addr[0]
 set_location_assignment PIN_E11 -to ram_bank_addr[1]
-set_location_assignment PIN_T22 -to clk74_25M
-set_location_assignment PIN_AB16 -to fpga_reset
 set_location_assignment PIN_B20 -to ram_clk
 set_location_assignment PIN_B14 -to ram_clk_en
 set_location_assignment PIN_B16 -to ram_cas_n
@@ -72,10 +74,32 @@ set_location_assignment PIN_A14 -to ram_cs_n
 set_location_assignment PIN_A15 -to ram_ras_n
 set_location_assignment PIN_A16 -to ram_we_n
 
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to *
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ram*
+
+#============================================================
+# IO pins assignments
+#============================================================
+set_location_assignment PIN_AB14 -to user_io[1]
+set_location_assignment PIN_AA14 -to user_io[0]
+set_instance_assignment -name IO_STANDARD "3.0-V LVTTL" -to user_io*
+
+#============================================================
+# End pins assignments
+#============================================================
+
+set_global_assignment -name NUM_PARALLEL_PROCESSORS ALL
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_global_assignment -name OPTIMIZATION_MODE BALANCED
-set_global_assignment -name QIP_FILE pll166.qip
 
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name QIP_FILE ../../pll166.qip
+set_global_assignment -name VERILOG_FILE ../../mem_test.v
+set_global_assignment -name VERILOG_FILE ../../sdram_controller.v
+set_global_assignment -name VERILOG_FILE ../../pll166.v
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

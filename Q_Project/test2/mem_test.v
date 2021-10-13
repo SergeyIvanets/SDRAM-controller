@@ -51,6 +51,7 @@ module mem_test
      //! 
      input                                  clk74_25M,
      input                                  fpga_reset,
+	  output                         [1 : 0] user_io,
 
      //! SDRAM ports
      output     [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
@@ -77,6 +78,7 @@ module mem_test
   reg                              fpga_rd_en;
   reg                              fpga_req;
   wire                             fpga_ack;
+  wire                             fpga_clk;
 
   reg    [SDRAM_COL_WIDTH - 1 : 0] addr_col;
   reg    [SDRAM_ROW_WIDTH - 1 : 0] addr_row;
@@ -84,6 +86,8 @@ module mem_test
   reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_in_data;
   reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_out_data;
   reg  [FPGA_DATA_WIDTH   - 1 : 0] control_rd_data;
+  reg                     [14 : 0] wait_counter;  
+  wire                    [14 : 0] wait_power;  
 
 sdram_controller 
   #(
@@ -141,9 +145,6 @@ pll166_inst (
 	.c0              ( fpga_clk           )  // output clock 166 MHz
 	);
 
-
-  reg [14 : 0] wait_counter;  
-
 // State machine for control
   localparam           INIT              = 4'b0000;
   localparam           WR0               = 4'b0001;
@@ -153,6 +154,7 @@ pll166_inst (
   localparam           FINISH            = 4'b1111;
 
   reg [3 : 0] state, next_state;
+  reg [1 : 0] comp;   
 
 //! Next state logic
 always @ * begin: fsm_next_state
@@ -276,7 +278,39 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
     control_rd_data <= fpga_rd_data;
 end
 
+always @ (posedge fpga_clk, posedge fpga_reset) begin
+  if (fpga_reset) 
+    comp <= 0;
+  else
+    case (state)
+      INIT:
+        comp <= 0;
+      
+      WR0:
+        comp <= 0;
 
+      WR1:
+        comp <= 0;
 
+      RD0: begin
+        if (control_rd_data == 32'hff01)
+          comp [0] <= 1;
+        else
+          comp [0] <= 0;
+      
+        comp [1] <= comp [1];
+      end
 
+      RD1: begin
+        if (control_rd_data == 32'hff02)
+          comp [1] <= 1;
+        else
+          comp [1] <= 0;
+      
+        comp [0] <= comp [0];
+      end
+    endcase
+end
+
+assign user_io = comp;
 endmodule

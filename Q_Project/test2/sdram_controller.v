@@ -184,16 +184,18 @@ parameter CAS_LATENCY = 3'b011
   reg                                                     [3:0] cmd, next_cmd;
 
   //! control signals
-  wire                                                          start;
-  wire                                                          load_mode_done;
-  wire                                                          active_done;
-  wire                                                          refresh_done;
-  wire                                                          read_done;
-  wire                                                          write_done;
-  wire                                                          should_refresh;
+  wire                                                           start;
+  wire                                                           load_mode_done;
+  wire                                                           active_done;
+  wire                                                           refresh_done;
+  wire                                                           read_done;
+  wire                                                           write_done;
+  wire                                                           should_refresh;
+  reg                                                            write_state_flag;
+  reg                                                            oe;                                
 
   //! Wait counter [$clog2 (INIT_WAIT) - 1 : 0]
-  reg                                                  [14 : 0] wait_counter;  
+  reg                                                   [14 : 0] wait_counter;  
   //! Number of row per refresh time [$clog2 (REFRESH_INTERVAL) - 1 : 0]
   reg                                                   [23 : 0] refresh_counter;
 
@@ -221,7 +223,7 @@ parameter CAS_LATENCY = 3'b011
 //! Next state logic
 always @ * begin: fsm_next_state
   next_state <= state;
-
+  write_state_flag <= 1'b0;
   // default to a NOP command
   next_cmd <= CMD_NOP;
 
@@ -306,7 +308,8 @@ always @ * begin: fsm_next_state
           end
 
     // Execute a write and autoprecharge command
-    WRITE_A:
+    WRITE_A: begin
+    write_state_flag <= 1'b1;
       if (write_done)
         if (should_refresh) begin
           next_state <= REFRESH;
@@ -320,6 +323,7 @@ always @ * begin: fsm_next_state
             next_state <= IDLE;
             next_cmd <= CMD_NOP;
           end
+    end
 
     // Execute an auto refresh
     REFRESH:
@@ -332,6 +336,11 @@ always @ * begin: fsm_next_state
             next_state <= IDLE;
             next_cmd <= CMD_NOP;
           end
+    
+    default: begin
+      next_state <= IDLE;
+      next_cmd <= CMD_NOP;
+	end
   endcase
 end
 
@@ -381,15 +390,6 @@ always @ (posedge fpga_clk) begin: fpga_side_reg
   end
 end
 
-//  SDRAM data output register
-always @ (posedge fpga_clk) begin: sdram_data_reg
-   if (state == READ_A )
-      q_reg <= #1 ram_data;
-end 
-
-// Assign output FPGA data port 
-assign fpga_rd_data = q_reg;
-
 // set wait signals
 assign load_mode_done = (wait_counter == (LOAD_MODE_WAIT-1)) ? 1'b1 : 1'b0;
 assign active_done    = (wait_counter == (ACTIVE_WAIT-1   )) ? 1'b1 : 1'b0;
@@ -428,16 +428,36 @@ always @ (state)
 // set SDRAM address
 always @ (state)
   case (state)
-    INIT     : ram_addr = "0100_0000_0000";
+    INIT     : ram_addr = 12'b0100_0000_0000;
     MODE     : ram_addr = MODE_REG;
     ACTIVATE : ram_addr = row;
     READ_A   : ram_addr = {3'b010, col};
     WRITE_A  : ram_addr = {3'b010, col};
     default  : ram_addr = {SDRAM_ADDR_WIDTH{1'b0}};
   endcase
- 
+
+  //  SDRAM data output register
+  always @ (posedge fpga_clk) begin: sdram_rd_data_reg
+    if (state == READ_A)
+      q_reg <= #1 ram_data;
+    else 
+      q_reg <= #1 {SDRAM_DATA_WIDTH{1'b0}};
+  end 
+
+  // Assign output FPGA data port 
+  assign fpga_rd_data = q_reg;
+
+  always @ (posedge fpga_clk, posedge fpga_reset) begin: control_data_path 
+    if (fpga_reset) 
+      oe <= #1 1'b0;
+    else if (write_state_flag)
+      oe <= #1 1'b1;
+    else
+      oe <= #1 1'b0;
+  end
+
   // set SDRAM data signals
-  assign  ram_data = (state == WRITE_A) ? data_reg : {SDRAM_DATA_WIDTH{1'bz}};
+  assign  ram_data = (oe) ? data_reg : {SDRAM_DATA_WIDTH{1'bz}};
 
   // set SDRAM data mask DQM
   assign ram_dqm = 0;

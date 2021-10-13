@@ -1,0 +1,19 @@
+// Read simple FIFO
+// Code for wavedrom.com 
+{signal: [
+  {name: "clk",          wave: "n............"},
+  ['in',
+    {name: "reset",      wave: "0............"},
+    {name: "write",      wave: "0............"},
+    {name: "read",       wave: "0.10101010101"},
+    {name: "write_data", wave: "3............", data: ["07"]}
+  ],
+    {},
+  ['out',
+   {name: "read_data",  wave: "3....4.5.6....", data: ["00", "01", "02", "03"], phase: 0.5},
+   {name: "empty",       wave: "0........1....", phase: 0.5},
+   {name: "full",        wave: "1..0..........", phase: 0.5}
+  ]
+],
+ config: {hscale: 1}
+}
