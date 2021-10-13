@@ -50,8 +50,8 @@ module mem_test
    (
      //! 
      input                                  clk74_25M,
-     input                                  fpga_reset,
-	  output                         [1 : 0] user_io,
+     input                                  reset_n,
+	  output                         [11 : 0] user_io,
 
      //! SDRAM ports
      output     [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
@@ -79,6 +79,7 @@ module mem_test
   reg                              fpga_req;
   wire                             fpga_ack;
   wire                             fpga_clk;
+  wire                             fpga_reset;  
 
   reg    [SDRAM_COL_WIDTH - 1 : 0] addr_col;
   reg    [SDRAM_ROW_WIDTH - 1 : 0] addr_row;
@@ -88,6 +89,9 @@ module mem_test
   reg  [FPGA_DATA_WIDTH   - 1 : 0] control_rd_data;
   reg                     [14 : 0] wait_counter;  
   wire                    [14 : 0] wait_power;  
+  reg                     [10 : 0] io_fpga_counter;  
+  reg                     [10 : 0] io_hdmi_counter;  
+
 
 sdram_controller 
   #(
@@ -144,6 +148,8 @@ pll166_inst (
 	.inclk0          ( clk74_25M          ), // input clock 74.25 MHz
 	.c0              ( fpga_clk           )  // output clock 166 MHz
 	);
+
+assign fpga_reset = ~reset_n;
 
 // State machine for control
   localparam           INIT              = 4'b0000;
@@ -312,5 +318,33 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
     endcase
 end
 
-assign user_io = comp;
+
+always @ (posedge fpga_clk, posedge fpga_reset) begin
+  if (fpga_reset) 
+    io_fpga_counter <= 0;
+  else
+    io_fpga_counter <= io_fpga_counter + 1;
+end
+
+always @ (posedge clk74_25M, posedge fpga_reset) begin
+  if (fpga_reset) 
+    io_hdmi_counter <= 0;
+  else
+    io_hdmi_counter <= io_hdmi_counter + 1;
+end
+
+
+assign user_io [ 0] = io_fpga_counter [3];
+assign user_io [ 1] = io_fpga_counter [4];
+assign user_io [ 2] = io_fpga_counter [5];
+assign user_io [ 3] = io_fpga_counter [6];
+assign user_io [ 4] = io_fpga_counter [7];
+assign user_io [ 5] = io_fpga_counter [8];
+assign user_io [ 6] = io_fpga_counter [9];
+assign user_io [ 7] = io_fpga_counter [10];
+assign user_io [ 8] = io_fpga_counter [9];
+assign user_io [ 9] = io_fpga_counter [8];
+assign user_io [10] = io_fpga_counter [7];
+assign user_io [11] = ram_ras_n;
+
 endmodule

@@ -38,7 +38,7 @@ module sdram_controller
                 SDRAM_CLK_MAX     = 166,  //! MHz From SDRAM datasheet
                 //! Timig prameters
                 //! Power-up delay 100 us min. Set 200 ms
-                T_POWER_UP = 200_000,
+                T_POWER_UP = 200_000_000,
                 //! Command period (PRE to ACT) delay, ns min
                 T_RP       = 18,
                 //! Command period (REF to REF/ACT to ACT) delay, ns min
@@ -195,7 +195,7 @@ parameter CAS_LATENCY = 3'b011
   reg                                                            oe;                                
 
   //! Wait counter [$clog2 (INIT_WAIT) - 1 : 0]
-  reg                                                   [14 : 0] wait_counter;  
+  reg                                                   [24 : 0] wait_counter;  
   //! Number of row per refresh time [$clog2 (REFRESH_INTERVAL) - 1 : 0]
   reg                                                   [23 : 0] refresh_counter;
 
