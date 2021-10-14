@@ -159,15 +159,15 @@ parameter CAS_LATENCY = 3'b011
 //! | Self-Refresh  | SELF_REFRESH | 0 | 0 | 0 | 1 |
 //! | Mode register set  | LOAD_MODE | 0 | 0 | 0 | 0 |
 
-  localparam           CMD_DESLECT       = 4'b1111;
-  localparam           CMD_NOP           = 4'b0111;
-  localparam           CMD_BST           = 4'b0110;
-  localparam           CMD_READ_PRE      = 4'b0101;
-  localparam           CMD_WRITE_PRE     = 4'b0100;
-  localparam           CMD_ACTIVE        = 4'b0011;
-  localparam           CMD_PRECHARGE     = 4'b0010;
-  localparam           CMD_REFRESH       = 4'b0001;
-  localparam           CMD_LOAD_MODE     = 4'b0000;
+  localparam           CMD_DESLECT       = 4'b1111; // f
+  localparam           CMD_NOP           = 4'b0111; // 7
+  //localparam           CMD_BST           = 4'b0110; // 6
+  localparam           CMD_READ_PRE      = 4'b0101; // 5
+  localparam           CMD_WRITE_PRE     = 4'b0100; // 4
+  localparam           CMD_ACTIVE        = 4'b0011; // 3
+  localparam           CMD_PRECHARGE     = 4'b0010; // 2
+  localparam           CMD_REFRESH       = 4'b0001; // 1
+  localparam           CMD_LOAD_MODE     = 4'b0000; // 0
 
   //! SDRAM control FSM States
   localparam           INIT              = 8'b0000_0000;
@@ -268,6 +268,7 @@ always @ * begin: fsm_next_state
       else if (fpga_req) begin
         next_state <= ACTIVATE;
         next_cmd   <= CMD_ACTIVE;
+        if (fpga_wr_en) write_state_flag <= 1'b1;
       end  
         else begin
           next_state <= IDLE;
@@ -280,15 +281,18 @@ always @ * begin: fsm_next_state
         if (we_reg) begin
           next_state <= WRITE_A;
           next_cmd   <= CMD_WRITE_PRE;
+          write_state_flag <= 1'b1;
         end
         else if (rd_reg) begin
           next_state <= READ_A;
           next_cmd   <= CMD_READ_PRE;
         end
-          else begin
-            next_state <= IDLE;
-            next_cmd <= CMD_NOP;
-          end
+      else begin
+        next_state <= IDLE;
+        next_cmd <= CMD_NOP;
+        if (we_reg) 
+          write_state_flag <= 1'b1;
+      end
           
 
     // Execute a read and autoprecharge command
@@ -309,7 +313,6 @@ always @ * begin: fsm_next_state
 
     // Execute a write and autoprecharge command
     WRITE_A: begin
-    write_state_flag <= 1'b1;
       if (write_done)
         if (should_refresh) begin
           next_state <= REFRESH;

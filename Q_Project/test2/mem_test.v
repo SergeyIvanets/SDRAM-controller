@@ -17,7 +17,7 @@ module mem_test
                 SDRAM_CLK_MAX     = 166,  //! MHz From SDRAM datasheet
                 //! Timig prameters
                 //! Power-up delay 100 us min. Set 200 ms
-                T_POWER_UP = 200_000,
+                T_POWER_UP = 200_000_000,
                 //! Command period (PRE to ACT) delay, ns min
                 T_RP       = 18,
                 //! Command period (REF to REF/ACT to ACT) delay, ns min
@@ -26,8 +26,8 @@ module mem_test
                 T_MRD      = 18,
                 //! Active to Read/Write delay, ns min
                 T_RCD      = 18,
-                //! Refresh cycle time, ns max
-                T_REF      = 64_000_000,
+                //! Refresh cycle time 64ms max, value in ns 
+                T_REF      = 63_999_000,
                 //! RAS time, ns min
                 T_RAS       = 42,
                 //! The number of 16-bit words to be bursted during a read/write
@@ -44,31 +44,43 @@ module mem_test
                 //!	Controller Parameter
                 //! 166 MHz
                 //! CAS Latence 2 cycle
-                CAS_LATENCY = 3'b010
+                CAS_LATENCY = 3'b010,
+
+                //! waiting time before write
+                WAIT_BEFORE = 3'h7
 )
 
    (
-     //! 
-     input                                  clk74_25M,
-     input                                  reset_n,
-	  output                         [11 : 0] user_io,
+    //! 
+    input                                   clk74_25M,
+    input                                   reset_n,
+	  output                         [11 : 2] user_io,
+    input                           [1 : 0] key_io,
+     
 
-     //! SDRAM ports
-     output     [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
-     output     [SDRAM_BANK_WIDTH  - 1 : 0] ram_bank_addr,
-     output     [SDRAM_BYTES_WIDTH - 1 : 0] ram_dqm,
-     inout      [SDRAM_DATA_WIDTH  - 1 : 0] ram_data,
+    //! SDRAM ports
+    output      [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
+    output      [SDRAM_BANK_WIDTH  - 1 : 0] ram_bank_addr,
+    output      [SDRAM_BYTES_WIDTH - 1 : 0] ram_dqm,
+    inout       [SDRAM_DATA_WIDTH  - 1 : 0] ram_data,
 
-     output                                 ram_ras_n,
-     output                                 ram_cas_n,
-     output                                 ram_clk,
-     output                                 ram_clk_en,
-     output                                 ram_cs_n,
-     output                                 ram_we_n
+    output                                  ram_ras_n,
+    output                                  ram_cas_n,
+    output                                  ram_clk,
+    output                                  ram_clk_en,
+    output                                  ram_cs_n,
+    output                                  ram_we_n
    );
 
   localparam               CLK_PERIOD = 1.0/SDRAM_CLK_MAX * 1_000.0;
-  localparam integer REFRESH_INTERVAL = T_REF/CLK_PERIOD - 10;
+  localparam integer REFRESH_INTERVAL = T_REF/CLK_PERIOD;
+  // the number of clock cycles to wait while a REFRESH command is being
+  // executed
+  // 10 
+  localparam integer     REFRESH_WAIT = T_RC/CLK_PERIOD;
+  // Interval between write or read operation
+  // Refresh + T_RCD + CAS lat (2) + 5 
+  localparam                TEST_WAIT = REFRESH_WAIT + T_RCD + 2 + 5;
 
   //! FPGA port
   wire [FPGA_ADDR_WIDTH   - 1 : 0] fpga_addr;
@@ -91,6 +103,7 @@ module mem_test
   wire                    [14 : 0] wait_power;  
   reg                     [10 : 0] io_fpga_counter;  
   reg                     [10 : 0] io_hdmi_counter;  
+  reg                      [1 : 0] reg_key_io;                   
 
 
 sdram_controller 
@@ -152,11 +165,15 @@ pll166_inst (
 assign fpga_reset = ~reset_n;
 
 // State machine for control
-  localparam           INIT              = 4'b0000;
+  localparam           INIT1             = 4'b0000;
   localparam           WR0               = 4'b0001;
+  localparam           WR0_NOP           = 4'b0011;
   localparam           WR1               = 4'b0010;
+  localparam           WR1_NOP           = 4'b0111;
   localparam           RD0               = 4'b0100;
+  localparam           RD0_NOP           = 4'b1001;
   localparam           RD1               = 4'b1000;
+  localparam           RD1_NOP           = 4'b1011;
   localparam           FINISH            = 4'b1111;
 
   reg [3 : 0] state, next_state;
@@ -167,19 +184,29 @@ always @ * begin: fsm_next_state
   next_state <= state;
 
   case (state)
-  INIT:
-   if (wait_power == 0) 
-        next_state <= INIT;
-      else if (wait_counter == INIT) 
+  INIT1:
+   if (key_io [0] == 1'b0) 
         next_state <= WR0;
   WR0:
-      next_state <= WR1;
+    next_state <= WR0_NOP;
+  WR0_NOP:
+   if (wait_counter == (T_RCD - 4))
+    if (fpga_ack == 1'b0) next_state <= WR1;
   WR1:
-      next_state <= RD0;
+    next_state <= WR1_NOP;
+  WR1_NOP:
+   if (wait_counter == (T_RCD - 4))
+    if (fpga_ack == 1'b0) next_state <= RD0;
   RD0:
-      next_state <= RD1;
+    next_state <= RD0_NOP;
+  RD0_NOP:
+   if (wait_counter == (T_RCD - 4))
+    if (fpga_ack == 1'b0) next_state <= RD1;
   RD1:
-      next_state <= FINISH;
+    next_state <= RD1_NOP;
+  RD1_NOP:
+   if (wait_counter == (T_RCD - 4))
+    if (fpga_ack == 1'b0) next_state <= FINISH;
   FINISH:
       next_state <= FINISH;
   endcase
@@ -188,20 +215,24 @@ end
 //! Next state register
 always @ (posedge fpga_clk, posedge fpga_reset) begin
   if (fpga_reset) 
-    state <= INIT;
+    state <= INIT1;
   else 
     state <= next_state;
 end 
 
-//! The wait counter is used to make power-up delay
-always @ (posedge fpga_clk, posedge fpga_reset) begin
+//! The wait counter is used to hold the current state 
+//! for a number of clock cycles
+always @ (posedge fpga_clk, posedge fpga_reset) begin: wait_counter_always
   if (fpga_reset) 
-    wait_counter <= 0;
+    wait_counter <= #1 0;
+  // state changing
+  else if (state != next_state) 
+    wait_counter <= #1 0;
   else
-    wait_counter <= wait_counter + 1;
+    wait_counter <= #1 wait_counter + 1;
 end
 
-assign wait_power = (wait_counter == ({15{1'b1}})) ? 1'b1 : 1'b0;
+//assign wait_power = (wait_counter == ({5{1'b1}})) ? 1'b1 : 1'b0;
 
 //! Set memory controller signal
 always @ (posedge fpga_clk, posedge fpga_reset) begin
@@ -209,18 +240,18 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
     addr_col      <= 9'h000;
     addr_row      <= 12'h000;
     addr_bank     <= 2'h0;
-    fpga_wr_data  <= 32'h0000; 
+    fpga_wr_data  <= 32'h0000_0000; 
     fpga_wr_en    <= 1'b0;
     fpga_rd_en    <= 1'b0;
     fpga_req      <= 1'b0;
   end
   else
   case (state)
-    INIT   : begin
+    INIT1   : begin
       addr_col      <= 9'h000;
       addr_row      <= 12'h000;
       addr_bank     <= 2'h0;
-      fpga_wr_data  <= 32'h0000; 
+      fpga_wr_data  <= 32'h0000_0000; 
       fpga_wr_en    <= 1'b0;
       fpga_rd_en    <= 1'b0;
       fpga_req      <= 1'b0;
@@ -229,7 +260,7 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
       addr_col      <= 9'h001;
       addr_row      <= 12'hfff;
       addr_bank     <= 2'h0;
-      fpga_wr_data  <= 32'hff01; 
+      fpga_wr_data  <= 32'h0000_ff01; 
       fpga_wr_en    <= 1'b1;
       fpga_rd_en    <= 1'b0;
       fpga_req      <= 1'b1;
@@ -238,7 +269,7 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
       addr_col      <= 9'h0f2;
       addr_row      <= 12'h5f2;
       addr_bank     <= 2'h1;
-      fpga_wr_data  <= 32'hff02; 
+      fpga_wr_data  <= 32'hf0f0_ff02; 
       fpga_wr_en    <= 1'b1;
       fpga_rd_en    <= 1'b0;
       fpga_req      <= 1'b1;
@@ -247,7 +278,7 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
       addr_col      <= 9'h001;
       addr_row      <= 12'hfff;
       addr_bank     <= 2'h0;
-      fpga_wr_data  <= 32'h0000; 
+      fpga_wr_data  <= 32'h0000_0000; 
       fpga_wr_en    <= 1'b0;
       fpga_rd_en    <= 1'b1;
       fpga_req      <= 1'b1;
@@ -256,16 +287,16 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
       addr_col      <= 9'h0f2;
       addr_row      <= 12'h5f2;
       addr_bank     <= 2'h1;
-      fpga_wr_data  <= 32'h0000; 
+      fpga_wr_data  <= 32'h0000_0000; 
       fpga_wr_en    <= 1'b0;
       fpga_rd_en    <= 1'b1;
       fpga_req      <= 1'b1;
     end
-    FINISH : begin
+    default : begin
       addr_col      <= 9'h000;
       addr_row      <= 12'h000;
       addr_bank     <= 2'h0;
-      fpga_wr_data  <= 32'h0000; 
+      fpga_wr_data  <= 32'h0000_0000; 
       fpga_wr_en    <= 1'b0;
       fpga_rd_en    <= 1'b0;
       fpga_req      <= 1'b0;
@@ -283,13 +314,13 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
   else
     control_rd_data <= fpga_rd_data;
 end
-
+/*
 always @ (posedge fpga_clk, posedge fpga_reset) begin
   if (fpga_reset) 
     comp <= 0;
   else
     case (state)
-      INIT:
+      INIT1:
         comp <= 0;
       
       WR0:
@@ -317,8 +348,8 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin
       end
     endcase
 end
-
-
+*/
+/*
 always @ (posedge fpga_clk, posedge fpga_reset) begin
   if (fpga_reset) 
     io_fpga_counter <= 0;
@@ -332,19 +363,14 @@ always @ (posedge clk74_25M, posedge fpga_reset) begin
   else
     io_hdmi_counter <= io_hdmi_counter + 1;
 end
+*/
+always @ (posedge fpga_clk) begin
+  if (fpga_reset) 
+    reg_key_io <= key_io;
+end
 
 
-assign user_io [ 0] = io_fpga_counter [3];
-assign user_io [ 1] = io_fpga_counter [4];
-assign user_io [ 2] = io_fpga_counter [5];
-assign user_io [ 3] = io_fpga_counter [6];
-assign user_io [ 4] = io_fpga_counter [7];
-assign user_io [ 5] = io_fpga_counter [8];
-assign user_io [ 6] = io_fpga_counter [9];
-assign user_io [ 7] = io_fpga_counter [10];
-assign user_io [ 8] = io_fpga_counter [9];
-assign user_io [ 9] = io_fpga_counter [8];
-assign user_io [10] = io_fpga_counter [7];
-assign user_io [11] = ram_ras_n;
+
+assign user_io [10] = reg_key_io [0];
 
 endmodule

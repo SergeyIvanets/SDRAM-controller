@@ -196,9 +196,6 @@ begin
             $stime, write, read, write_data, read_data, queue_FIFO [0], empty, full, almost_empty, almost_full, i_fifo.rd_ptr, i_fifo.wr_ptr);
 */
 //-----------------------------------------------------//
-// ------------- Full amd empty test ------------------//
-
-$display ("\n    ------------- Full amd empty test ----------------\n");
   reset_task ();
 
   # (clock_period * REFRESH_INTERVAL * 2);
