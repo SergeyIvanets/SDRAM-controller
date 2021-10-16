@@ -24,7 +24,7 @@ module sdram_controller
      parameter  
                 //! FPGA systen interface
                 //! addr = {ram_bank_addr, row, col}
-                FPGA_ADDR_WIDTH   = 23, //! System address width
+                FPGA_ADDR_WIDTH   = 23,   //! System address width
                 FPGA_DATA_WIDTH   = 32,   //! System data width
                 CLK_FREQUENCY_SYS = 166,  //! MHz System clock
 
@@ -37,39 +37,27 @@ module sdram_controller
                 SDRAM_BYTES_WIDTH = 4,
                 SDRAM_CLK_MAX     = 166,  //! MHz From SDRAM datasheet
                 //! Timig prameters
-                //! Power-up delay 100 us min. Set 200 ms
-                T_POWER_UP = 200_000_000,
-                //! Command period (PRE to ACT) delay, ns min
-                T_RP       = 18,
-                //! Command period (REF to REF/ACT to ACT) delay, ns min
-                T_RC       = 60,    
-                //! Mode register Program Time delay, ns min
-                T_MRD      = 18,
-                //! Active to Read/Write delay, ns min
-                T_RCD      = 18,
-                //! Refresh cycle time, ns max
-                T_REF      = 64_000_000,
-                //! RAS time, ns min
-                T_RAS       = 42,
+                T_POWER_UP = 200_000_000, //! Power-up delay 100 us min. Set 200 ms
+                T_RP       = 18,          //! Command period (PRE to ACT) delay, ns min
+                T_RC       = 60,          //! Command period (REF to REF/ACT to ACT) delay, ns min  
+                T_MRD      = 18,          //! Mode register Program Time delay, ns min
+                T_RCD      = 18,          //! Active to Read/Write delay, ns min
+                T_REF      = 64_000_000,  //! Refresh cycle time, ns max
+                T_RAS       = 42,         //! RAS time, ns min
                 //! The number of 16-bit words to be bursted during a read/write
-                // parameter BURST_LENGTH = 2;
+                //! parameter BURST_LENGTH = 2
                 //! Write recovery Time or InputData to Precharge Command Delay Time
                 T_WR        = 12,
                 //! Mode Register Definition
-                //! M9: Write Burst Mode: 0 - programmed Burst Lengtn, 1 - Single Location
-                WRITE_BURST_MODE = 1'b1,
-                //! M3:  Burst Type: 0 - Sequention, 1 - Interleaved
-                BURST_TYPE       = 1'b0,
-                //! M2: - M0  Burst Length in  000 - 1; 001 - 2; 010 - 4; 011 - 8
-                BURST_LENGTH     = 3'b000,
+                WRITE_BURST_MODE = 1'b1,   //! M9: Write Burst Mode: 0 - programmed Burst Lengtn, 1 - Single Location
+                BURST_TYPE       = 1'b0,   //! M3:  Burst Type: 0 - Sequention, 1 - Interleaved
+                BURST_LENGTH     = 3'b000, //! M2: - M0  Burst Length in  000 - 1; 001 - 2; 010 - 4; 011 - 8
                 //!	Controller Parameter
-                //! 166 MHz
-                //! CAS Latence 2 cycle
-                CAS_LATENCY = 3'b010
+                CAS_LATENCY = 3'b010       //! 166 MHz - CAS Latence 2 cycle
 /*
-//! 100 MHz	
-//! CAS Latence 3 cycle
-parameter CAS_LATENCY = 3'b011
+                //! 100 MHz	
+                //! CAS Latence 3 cycle
+                CAS_LATENCY = 3'b011
 */
    )
   
@@ -85,7 +73,8 @@ parameter CAS_LATENCY = 3'b011
      output     [FPGA_DATA_WIDTH   - 1 : 0] fpga_rd_data,
      input                                  fpga_rd_en,
      input                                  fpga_req,
-     output                                 fpga_ack,
+     output                                 fpga_ack, // operation complete
+     output                                 fpga_data_ready, // data on fpga_rd_data valid
 
      //! SDRAM ports
      output reg [SDRAM_ADDR_WIDTH  - 1 : 0] ram_addr,
@@ -101,45 +90,38 @@ parameter CAS_LATENCY = 3'b011
      output                                 ram_we_n
    );
 
-//! ------------------ Local Parameters --------------------
+  // ------------------ Local Parameters --------------------
 
   //! The value written to the mode register to configure the memory
   localparam MODE_REG = {2'b00, WRITE_BURST_MODE, 2'b00, CAS_LATENCY, BURST_TYPE, BURST_LENGTH};
 
   //! Calculate the clock period (in nanoseconds)
-  // 1/166*1000 = 6.02
+  //! 1/166*1000 = 6.02
   localparam CLK_PERIOD = 1.0/SDRAM_CLK_MAX * 1_000.0;
 
   //! The number of clock cycles from power-up to inicialaze SDRAM
   localparam integer INIT_WAIT = T_POWER_UP/CLK_PERIOD;
 
-  // the number of clock cycles to wait while a LOAD MODE command is being
-  // executed
+  //! The number of clock cycles to wait while a LOAD MODE command
   localparam integer LOAD_MODE_WAIT = T_MRD/CLK_PERIOD;
 
-  // the number of clock cycles to wait while an ACTIVE command is being
-  // executed
+  //! The number of clock cycles to wait while an ACTIVE command
   localparam integer ACTIVE_WAIT = T_RCD/CLK_PERIOD;
 
-  // the number of clock cycles to wait while a REFRESH command is being
-  // executed
-  // 10 
+  //! The number of clock cycles to wait while a REFRESH command: 10 
   localparam integer REFRESH_WAIT = T_RC/CLK_PERIOD;
 
-  // the number of clock cycles to wait while a PRECHARGE command is being
-  // executed
-  //3
+  //! The number of clock cycles to wait while a PRECHARGE command: 3
   localparam integer PRECHARGE_WAIT = T_RP/CLK_PERIOD;
 
-  // the number of clock cycles to wait while a READ command is being executed
+  //! The number of clock cycles to wait while a READ command is being executed
   localparam integer READ_WAIT = CAS_LATENCY+BURST_LENGTH;
 
-  // the number of clock cycles to wait while a WRITE command is being executed
+  //! The number of clock cycles to wait while a WRITE command is being executed
   localparam integer WRITE_WAIT = BURST_LENGTH + (T_WR+T_RP)/CLK_PERIOD;
 
-  // the number of clock cycles before the memory controller needs to refresh
-  // the SDRAM
-  // 12 = max burst (12) + cas delay + 2 cycles
+  //! The number of clock cycles before the memory controller starts to refresh
+  // the SDRAM  12 = max burst (12) + cas delay (2) + 2 cycles
   localparam integer REFRESH_INTERVAL =T_REF/CLK_PERIOD - 12;
 
 //! SDRAM command code acording to datasheet
@@ -180,8 +162,9 @@ parameter CAS_LATENCY = 3'b011
   localparam           WRITE_A           = 8'b0100_0000;
   localparam           PRECHARGE         = 8'b1000_0000;
 
-  reg                                                     [7:0] state, next_state;
-  reg                                                     [3:0] cmd, next_cmd;
+  //! State and command 
+  reg                                                      [7:0] state, next_state;
+  reg                                                      [3:0] cmd, next_cmd;
 
   //! control signals
   wire                                                           start;
@@ -192,7 +175,8 @@ parameter CAS_LATENCY = 3'b011
   wire                                                           write_done;
   wire                                                           should_refresh;
   reg                                                            write_state_flag;
-  reg                                                            oe;                                
+  reg                                                            oe;    
+  reg                                      [CAS_LATENCY + 1 : 0] fpga_data_ready_reg;         
 
   //! Wait counter [$clog2 (INIT_WAIT) - 1 : 0]
   reg                                                   [24 : 0] wait_counter;  
@@ -220,10 +204,10 @@ parameter CAS_LATENCY = 3'b011
 
   assign ram_clk = fpga_clk;
 
+//! State machine 
 //! Next state logic
 always @ * begin: fsm_next_state
   next_state <= state;
-  write_state_flag <= 1'b0;
   // default to a NOP command
   next_cmd <= CMD_NOP;
 
@@ -268,7 +252,6 @@ always @ * begin: fsm_next_state
       else if (fpga_req) begin
         next_state <= ACTIVATE;
         next_cmd   <= CMD_ACTIVE;
-        if (fpga_wr_en) write_state_flag <= 1'b1;
       end  
         else begin
           next_state <= IDLE;
@@ -281,7 +264,6 @@ always @ * begin: fsm_next_state
         if (we_reg) begin
           next_state <= WRITE_A;
           next_cmd   <= CMD_WRITE_PRE;
-          write_state_flag <= 1'b1;
         end
         else if (rd_reg) begin
           next_state <= READ_A;
@@ -290,8 +272,6 @@ always @ * begin: fsm_next_state
       else begin
         next_state <= IDLE;
         next_cmd <= CMD_NOP;
-        if (we_reg) 
-          write_state_flag <= 1'b1;
       end
           
 
@@ -439,24 +419,43 @@ always @ (state)
     default  : ram_addr = {SDRAM_ADDR_WIDTH{1'b0}};
   endcase
 
-  //  SDRAM data output register
+  //! Output data
+  //  SDRAM data output register and data valid signal
   always @ (posedge fpga_clk) begin: sdram_rd_data_reg
-    if (state == READ_A)
+    if (fpga_data_ready_reg [CAS_LATENCY] == 1'b1) begin
       q_reg <= #1 ram_data;
-    else 
+    end
+    else begin
       q_reg <= #1 {SDRAM_DATA_WIDTH{1'b0}};
+    end
   end 
-
-  // Assign output FPGA data port 
+  //! fpga_data_ready signal delay for CAS delay CAS_LATENCY (2 or 3 cycles)
+  always @ (posedge fpga_clk, posedge fpga_reset) begin: fpga_data_ready_delay 
+    if (fpga_reset) 
+      fpga_data_ready_reg <= #1 {CAS_LATENCY{1'b0}};
+    else begin
+      fpga_data_ready_reg [CAS_LATENCY + 1 : 1] <= #1 fpga_data_ready_reg [CAS_LATENCY : 0];
+          if (state == READ_A & fpga_ack == 1'b1) 
+//          if (next_state == CMD_WRITE_PRE)
+            fpga_data_ready_reg [0] <= 1'b1;
+          else
+            fpga_data_ready_reg [0] <= 1'b0;
+    end
+  end 
+  
+  //! Assign output FPGA data port 
+  assign fpga_data_ready = fpga_data_ready_reg [CAS_LATENCY + 1];
   assign fpga_rd_data = q_reg;
 
   always @ (posedge fpga_clk, posedge fpga_reset) begin: control_data_path 
     if (fpga_reset) 
       oe <= #1 1'b0;
-    else if (write_state_flag)
+    else if (fpga_wr_en == 1'b1)
       oe <= #1 1'b1;
-    else
+    else if (state == WRITE_A)
       oe <= #1 1'b0;
+    else
+      oe <= oe;
   end
 
   // set SDRAM data signals

@@ -92,13 +92,14 @@ module mem_test
   wire                             fpga_ack;
   wire                             fpga_clk;
   wire                             fpga_reset;  
+  wire                             fpga_data_ready;
 
   reg    [SDRAM_COL_WIDTH - 1 : 0] addr_col;
   reg    [SDRAM_ROW_WIDTH - 1 : 0] addr_row;
   reg   [SDRAM_BANK_WIDTH - 1 : 0] addr_bank; 
   reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_in_data;
   reg   [FPGA_DATA_WIDTH  - 1 : 0] ram_out_data;
-  reg  [FPGA_DATA_WIDTH   - 1 : 0] control_rd_data;
+  reg   [FPGA_DATA_WIDTH  - 1 : 0] control_rd_data;
   reg                     [14 : 0] wait_counter;  
   wire                    [14 : 0] wait_power;  
   reg                     [10 : 0] io_fpga_counter;  
@@ -129,7 +130,7 @@ sdram_controller
   WRITE_BURST_MODE  ,
   BURST_TYPE        ,
   BURST_LENGTH      ,
-  CAS_LATENCY
+  CAS_LATENCY       
 )  
 
 sdram_controller_inst
@@ -143,6 +144,7 @@ sdram_controller_inst
 	.fpga_rd_en      (fpga_rd_en          ) ,	// input  rd_ready
 	.fpga_req        (fpga_req            ) ,	// input  req
 	.fpga_ack        (fpga_ack            ) ,	// output  ack
+  .fpga_data_ready (fpga_data_ready     ) , // output fpga_data_ready
 	.ram_addr        (ram_addr            ) ,	// output [SDRAM_ADDR_WIDTH-1:0] ram_addr
 	.ram_bank_addr   (ram_bank_addr       ) ,	// output [SDRAM_BANK_WIDTH-1:0] ram_bank_addr
 	.ram_dqm         (ram_dqm             ) ,	// output [SDRAM_BYTES_WIDTH-1:0] ram_dqm
@@ -195,7 +197,7 @@ always @ * begin: fsm_next_state
   WR1:
     next_state <= WR1_NOP;
   WR1_NOP:
-   if (wait_counter == (T_RCD - 4))
+   if (wait_counter == (T_RCD *4))
     if (fpga_ack == 1'b0) next_state <= RD0;
   RD0:
     next_state <= RD0_NOP;
@@ -231,8 +233,6 @@ always @ (posedge fpga_clk, posedge fpga_reset) begin: wait_counter_always
   else
     wait_counter <= #1 wait_counter + 1;
 end
-
-//assign wait_power = (wait_counter == ({5{1'b1}})) ? 1'b1 : 1'b0;
 
 //! Set memory controller signal
 always @ (posedge fpga_clk, posedge fpga_reset) begin
@@ -310,67 +310,21 @@ end
 // read data reg
 always @ (posedge fpga_clk, posedge fpga_reset) begin
   if (fpga_reset) 
-    control_rd_data <= 0;
+      control_rd_data <= #1 {FPGA_DATA_WIDTH{1'b0}};
   else
-    control_rd_data <= fpga_rd_data;
-end
-/*
-always @ (posedge fpga_clk, posedge fpga_reset) begin
-  if (fpga_reset) 
-    comp <= 0;
-  else
-    case (state)
-      INIT1:
-        comp <= 0;
-      
-      WR0:
-        comp <= 0;
-
-      WR1:
-        comp <= 0;
-
-      RD0: begin
-        if (control_rd_data == 32'hff01)
-          comp [0] <= 1;
-        else
-          comp [0] <= 0;
-      
-        comp [1] <= comp [1];
-      end
-
-      RD1: begin
-        if (control_rd_data == 32'hff02)
-          comp [1] <= 1;
-        else
-          comp [1] <= 0;
-      
-        comp [0] <= comp [0];
-      end
-    endcase
-end
-*/
-/*
-always @ (posedge fpga_clk, posedge fpga_reset) begin
-  if (fpga_reset) 
-    io_fpga_counter <= 0;
-  else
-    io_fpga_counter <= io_fpga_counter + 1;
+    if (fpga_data_ready == 1'b1)
+      control_rd_data <= fpga_rd_data;
+    else
+      control_rd_data <= #1 {FPGA_DATA_WIDTH{1'b0}};
 end
 
-always @ (posedge clk74_25M, posedge fpga_reset) begin
-  if (fpga_reset) 
-    io_hdmi_counter <= 0;
-  else
-    io_hdmi_counter <= io_hdmi_counter + 1;
-end
-*/
+
 always @ (posedge fpga_clk) begin
   if (fpga_reset) 
     reg_key_io <= key_io;
 end
 
-
-
 assign user_io [10] = reg_key_io [0];
+assign user_io [11] = wait_counter [8];
 
 endmodule
